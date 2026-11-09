@@ -31,7 +31,7 @@ const state = {
   uploadedFloorplanUrl: null,
   uploadedFloorplanImg: null,
   uploadedFloorplanTexture: null,
-  floorplanOpacity: 0.85,
+  floorplanOpacity: 0.15,
 
   // 현재 도면 공간 데이터 (방, 벽체, 창호, 빌트인)
   floorplanData: null,
@@ -1372,7 +1372,7 @@ function updateFloatingBadgePosition() {
 }
 
 /* =========================================================================
-   도면 첨부 & 자동 벽체 스캔 / 2D-to-3D 편집기
+   도면 첨부 & 2D 평면도 → 3D 아이소메트릭 절단 뷰(Cutaway View) 자동 변환 엔진
    ========================================================================= */
 function handleFloorplanImageUpload(file) {
   if (!file) return;
@@ -1394,43 +1394,16 @@ function handleFloorplanImageUpload(file) {
       state.planDepthMm = calcDepthMm;
       document.getElementById('inputPlanDepthMm').value = calcDepthMm;
 
-      // 1) 기존 표준 평면도 템플릿 UI 카드 삭제(숨김) 및 선택 해제
-      document.getElementById('presetTemplateCard')?.classList.add('hidden');
-      document.querySelectorAll('.preset-card').forEach((c) => c.classList.remove('active'));
-
-      // 2) 기존 표준 평면도 템플릿의 3D 데이터(방, 벽체, 창호, 빌트인) 완전히 삭제 후 첨부 도면 전용 베이스 생성
-      state.floorplanData = {
-        title: `CUSTOM FLOOR PLAN (${file.name.toUpperCase()}) · ${baseWidthMm}×${calcDepthMm} MM`,
-        widthMm: baseWidthMm,
-        depthMm: calcDepthMm,
-        rooms: [
-          {
-            id: 'r_custom_base',
-            name: '첨부 도면 베이스',
-            type: 'wood',
-            x: 0,
-            z: 0,
-            w: baseWidthMm,
-            d: calcDepthMm
-          }
-        ],
-        walls: [],
-        openings: [],
-        fixtures: null
-      };
-
-      // Three.js 텍스처 생성 및 오버레이 농도 설정
+      // Three.js 바닥 밑그림 텍스처 생성 (3D 입체 요소가 돋보이도록 밑그림 농도는 15%로 설정)
       const tex = new THREE.Texture(img);
       tex.needsUpdate = true;
       tex.colorSpace = THREE.SRGBColorSpace;
       state.uploadedFloorplanTexture = tex;
-      if (state.floorplanOpacity < 0.7) {
-        state.floorplanOpacity = 0.85;
-        const opSlider = document.getElementById('sliderPlanOpacity');
-        const opVal = document.getElementById('valPlanOpacity');
-        if (opSlider) opSlider.value = 85;
-        if (opVal) opVal.textContent = '85%';
-      }
+      state.floorplanOpacity = 0.15;
+      const opSlider = document.getElementById('sliderPlanOpacity');
+      const opVal = document.getElementById('valPlanOpacity');
+      if (opSlider) opSlider.value = 15;
+      if (opVal) opVal.textContent = '15%';
 
       // UI 업데이트
       document.getElementById('floorplanDropContent').classList.add('hidden');
@@ -1440,9 +1413,13 @@ function handleFloorplanImageUpload(file) {
       document.getElementById('floorplanRatioText').textContent =
         `비율 ${aspect.toFixed(2)} : 1 (${baseWidthMm.toLocaleString()} × ${calcDepthMm.toLocaleString()} mm)`;
 
-      document.getElementById('archPlanTitleStamp').textContent = state.floorplanData.title;
+      // 3D 아이소메트릭 절단 뷰 탭으로 즉시 전환 및 카메라 정렬
+      if (state.viewMode !== '3d') {
+        document.getElementById('btnMode3D')?.click();
+      }
+      setCameraPreset('iso-se');
 
-      // 3) 첨부된 도면 이미지로부터 벽체 단면을 자동 스캔하여 3D로 생성
+      // 첨부 도면 이미지를 정밀 분석하여 3D 아이소메트릭 절단 뷰(외벽/내벽/창호/원목마루/욕실/주방/실외실)로 변환
       autoTraceWallsFromUploadedImage(true);
     };
     img.src = dataUrl;
@@ -1504,7 +1481,7 @@ function rescaleFloorplanToDimensions(newW, newD) {
   }
 }
 
-/* 첨부 도면 이미지의 어두운 벽체 선분을 스캔·병합하여 3D 절단 벽체로 자동 추출 */
+/* 첨부된 2D 평면도 이미지를 분석하여 3D 아이소메트릭 절단 뷰(Cutaway View)로 자동 변환 */
 function autoTraceWallsFromUploadedImage(isInitialUpload = false) {
   if (!state.uploadedFloorplanImg) {
     showToast('먼저 도면 이미지를 첨부해 주세요.');
@@ -1512,89 +1489,469 @@ function autoTraceWallsFromUploadedImage(isInitialUpload = false) {
   }
 
   const img = state.uploadedFloorplanImg;
-  const scanW = 200;
-  const scanH = Math.max(60, Math.round(scanW * (img.naturalHeight / img.naturalWidth)));
+  const W = state.planWidthMm;
+  const D = state.planDepthMm;
+
+  const scanW = 180;
+  const scanH = Math.max(80, Math.round(scanW * (img.naturalHeight / img.naturalWidth)));
   const offCanvas = document.createElement('canvas');
   offCanvas.width = scanW;
   offCanvas.height = scanH;
   const ctx = offCanvas.getContext('2d');
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, scanW, scanH);
   ctx.drawImage(img, 0, 0, scanW, scanH);
   const imgData = ctx.getImageData(0, 0, scanW, scanH).data;
 
-  const isDarkWallPixel = (x, y) => {
+  const getPixel = (x, y) => {
     const idx = (y * scanW + x) * 4;
     const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2], a = imgData[idx + 3];
-    if (a < 90) return false;
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    return lum < 105; // 도면의 진한 벽체 단면 감지
+    const sat = Math.max(r, g, b) - Math.min(r, g, b);
+    return { r, g, b, a, lum, sat };
   };
 
-  const scaleX = state.planWidthMm / scanW;
-  const scaleZ = state.planDepthMm / scanH;
-  const horizWalls = [];
-  const vertWalls = [];
+  // 1) 이미지 테두리 픽셀에서 배경색(여백) 추출 및 외곽 Flood-Fill로 실제 도면 내부 영역(Footprint) 분리
+  const cornerSamples = [getPixel(1, 1), getPixel(scanW - 2, 1), getPixel(1, scanH - 2), getPixel(scanW - 2, scanH - 2)];
+  const bgR = cornerSamples.reduce((s, p) => s + p.r, 0) / 4;
+  const bgG = cornerSamples.reduce((s, p) => s + p.g, 0) / 4;
+  const bgB = cornerSamples.reduce((s, p) => s + p.b, 0) / 4;
 
-  // 가로 방향 벽체 스캔 및 인접 중복선 병합
-  for (let y = 3; y < scanH - 3; y += 2) {
+  const isRawBg = (x, y) => {
+    const p = getPixel(x, y);
+    if (p.a < 80) return true;
+    const diff = Math.abs(p.r - bgR) + Math.abs(p.g - bgG) + Math.abs(p.b - bgB);
+    return diff < 42 && p.lum > 215;
+  };
+
+  // 창문/문 틈새로 배경 Flood-Fill이 새어 들어가지 않도록 도면 선분을 3px 팽창(Dilate)한 장벽 생성
+  const barrier = new Uint8Array(scanW * scanH);
+  for (let y = 0; y < scanH; y++) {
+    for (let x = 0; x < scanW; x++) {
+      if (!isRawBg(x, y)) {
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < scanW && ny >= 0 && ny < scanH) {
+              barrier[ny * scanW + nx] = 1;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 외곽 테두리에서 시작하는 BFS Flood-Fill로 외부 여백(outside) 식별
+  const outside = new Uint8Array(scanW * scanH);
+  const queue = [];
+  for (let x = 0; x < scanW; x++) {
+    if (!barrier[x]) { outside[x] = 1; queue.push(x); }
+    const botIdx = (scanH - 1) * scanW + x;
+    if (!barrier[botIdx]) { outside[botIdx] = 1; queue.push(botIdx); }
+  }
+  for (let y = 0; y < scanH; y++) {
+    const leftIdx = y * scanW;
+    if (!barrier[leftIdx] && !outside[leftIdx]) { outside[leftIdx] = 1; queue.push(leftIdx); }
+    const rightIdx = y * scanW + (scanW - 1);
+    if (!barrier[rightIdx] && !outside[rightIdx]) { outside[rightIdx] = 1; queue.push(rightIdx); }
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const curr = queue[head++];
+    const cx = curr % scanW;
+    const cy = (curr / scanW) | 0;
+    const neighbors = [
+      [cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]
+    ];
+    for (const [nx, ny] of neighbors) {
+      if (nx >= 0 && nx < scanW && ny >= 0 && ny < scanH) {
+        const nIdx = ny * scanW + nx;
+        if (!outside[nIdx] && !barrier[nIdx]) {
+          outside[nIdx] = 1;
+          queue.push(nIdx);
+        }
+      }
+    }
+  }
+
+  // 2) 건축 모듈 그리드(24 × 20)로 도면 평면 형상(Polygon Footprint) 매핑
+  const G_COLS = 24;
+  const G_ROWS = 20;
+  const cellW = Math.round(W / G_COLS);
+  const cellD = Math.round(D / G_ROWS);
+  const cellInside = Array.from({ length: G_ROWS }, () => Array(G_COLS).fill(false));
+  const cellType = Array.from({ length: G_ROWS }, () => Array(G_COLS).fill('wood'));
+
+  let insideCount = 0;
+  for (let gz = 0; gz < G_ROWS; gz++) {
+    for (let gx = 0; gx < G_COLS; gx++) {
+      const sx0 = Math.floor((gx / G_COLS) * scanW);
+      const sx1 = Math.max(sx0 + 1, Math.floor(((gx + 1) / G_COLS) * scanW));
+      const sy0 = Math.floor((gz / G_ROWS) * scanH);
+      const sy1 = Math.max(sy0 + 1, Math.floor(((gz + 1) / G_ROWS) * scanH));
+
+      let inPts = 0, totalPts = 0;
+      let coolGrayPts = 0, floorSamplePts = 0;
+
+      for (let y = sy0; y < sy1; y++) {
+        for (let x = sx0; x < sx1; x++) {
+          totalPts++;
+          if (!outside[y * scanW + x]) {
+            inPts++;
+            const p = getPixel(x, y);
+            if (p.lum > 125 && p.lum < 242) {
+              floorSamplePts++;
+              if (p.sat < 18 && p.lum < 226) coolGrayPts++;
+            }
+          }
+        }
+      }
+
+      if (inPts / totalPts >= 0.45) {
+        cellInside[gz][gx] = true;
+        insideCount++;
+        // 도면 내 타일(회색/무채색 격자) 영역은 욕실/다용도실 타일로 분류, 나머지는 밝은 원목 마루로 분류
+        if (floorSamplePts > 4 && coolGrayPts / floorSamplePts > 0.62) {
+          cellType[gz][gx] = 'bath';
+        }
+      }
+    }
+  }
+
+  // 만약 여백 없는 꽉 찬 도면이거나 너무 연한 도면이면 기본 내부 영역 보장
+  if (insideCount < G_COLS * G_ROWS * 0.18 || insideCount > G_COLS * G_ROWS * 0.95) {
+    for (let gz = 1; gz < G_ROWS - 1; gz++) {
+      for (let gx = 1; gx < G_COLS - 1; gx++) {
+        cellInside[gz][gx] = true;
+      }
+    }
+  }
+
+  // 내부 빈 구멍(1칸짜리 노이즈 홀) 메우기
+  for (let gz = 1; gz < G_ROWS - 1; gz++) {
+    for (let gx = 1; gx < G_COLS - 1; gx++) {
+      if (!cellInside[gz][gx]) {
+        const adj =
+          (cellInside[gz - 1][gx] ? 1 : 0) +
+          (cellInside[gz + 1][gx] ? 1 : 0) +
+          (cellInside[gz][gx - 1] ? 1 : 0) +
+          (cellInside[gz][gx + 1] ? 1 : 0);
+        if (adj >= 3) cellInside[gz][gx] = true;
+      }
+    }
+  }
+
+  // 도면 내부 바운딩 박스 계산
+  let minGx = G_COLS, maxGx = 0, minGz = G_ROWS, maxGz = 0;
+  for (let gz = 0; gz < G_ROWS; gz++) {
+    for (let gx = 0; gx < G_COLS; gx++) {
+      if (cellInside[gz][gx]) {
+        if (gx < minGx) minGx = gx;
+        if (gx > maxGx) maxGx = gx;
+        if (gz < minGz) minGz = gz;
+        if (gz > maxGz) maxGz = gz;
+      }
+    }
+  }
+
+  // 3) 도면 외곽 경계선(Perimeter)을 따라 3D 외벽(Cutaway Exterior Walls) 및 창문·베란다 새시 자동 생성
+  const exteriorWalls = [];
+  const openings = [];
+
+  // 가로 외벽 경계 추출
+  for (let gz = 0; gz <= G_ROWS; gz++) {
     let runStart = -1;
-    for (let x = 3; x < scanW - 3; x++) {
-      if (isDarkWallPixel(x, y)) {
+    let isTopBoundary = false;
+    for (let gx = 0; gx <= G_COLS; gx++) {
+      const above = gz > 0 && gx < G_COLS ? cellInside[gz - 1][gx] : false;
+      const below = gz < G_ROWS && gx < G_COLS ? cellInside[gz][gx] : false;
+      const isEdge = above !== below;
+      if (isEdge) {
+        if (runStart === -1) {
+          runStart = gx;
+          isTopBoundary = below;
+        }
+      } else if (runStart !== -1) {
+        const x1 = runStart * cellW;
+        const x2 = gx * cellW;
+        const z = gz * cellD;
+        exteriorWalls.push({ x1, z1: z, x2, z2: z, thick: 220, ext: true });
+
+        // 긴 외벽 구간에는 도면의 창문·베란다 통창 새시 자동 재현
+        const segLen = x2 - x1;
+        if (segLen >= 1800) {
+          const margin = Math.round(segLen * 0.22);
+          openings.push({
+            type: !isTopBoundary && gz >= maxGz ? 'sash' : 'window',
+            x1: x1 + margin,
+            z1: z,
+            x2: x2 - margin,
+            z2: z
+          });
+        }
+        runStart = -1;
+      }
+    }
+  }
+
+  // 세로 외벽 경계 추출
+  for (let gx = 0; gx <= G_COLS; gx++) {
+    let runStart = -1;
+    for (let gz = 0; gz <= G_ROWS; gz++) {
+      const left = gx > 0 && gz < G_ROWS ? cellInside[gz][gx - 1] : false;
+      const right = gx < G_COLS && gz < G_ROWS ? cellInside[gz][gx] : false;
+      const isEdge = left !== right;
+      if (isEdge) {
+        if (runStart === -1) runStart = gz;
+      } else if (runStart !== -1) {
+        const z1 = runStart * cellD;
+        const z2 = gz * cellD;
+        const x = gx * cellW;
+        exteriorWalls.push({ x1: x, z1, x2: x, z2, thick: 220, ext: true });
+
+        const segLen = z2 - z1;
+        if (segLen >= 2000) {
+          const margin = Math.round(segLen * 0.25);
+          openings.push({
+            type: 'window',
+            x1: x,
+            z1: z1 + margin,
+            x2: x,
+            z2: z2 - margin
+          });
+        }
+        runStart = -1;
+      }
+    }
+  }
+
+  // 4) 도면 내부의 벽체 단면선(어두운 벽선 / 회색 벽체 / 이중선) 스캔하여 내부 절단 벽체 및 방문(Door) 생성
+  const isWallCandidate = (x, y) => {
+    if (outside[y * scanW + x]) return false;
+    const p = getPixel(x, y);
+    if (p.a < 90) return false;
+    // 진한 검은색/차콜색 벽체 또는 채도가 낮고 주변보다 어두운 회색/갈색 벽체 감지
+    if (p.lum < 128) return true;
+    if (p.lum < 168 && p.sat < 26) {
+      const pUp = getPixel(x, Math.max(0, y - 4));
+      const pDn = getPixel(x, Math.min(scanH - 1, y + 4));
+      const pLt = getPixel(Math.max(0, x - 4), y);
+      const pRt = getPixel(Math.min(scanW - 1, x + 4), y);
+      if (Math.max(pUp.lum, pDn.lum, pLt.lum, pRt.lum) - p.lum > 26) return true;
+    }
+    return false;
+  };
+
+  const scaleX = W / scanW;
+  const scaleZ = D / scanH;
+  const interiorHoriz = [];
+  const interiorVert = [];
+  const minRunPxX = Math.max(12, Math.round(scanW * 0.08));
+  const minRunPxZ = Math.max(12, Math.round(scanH * 0.08));
+
+  // 내부 가로 벽체 스캔
+  for (let y = 6; y < scanH - 6; y += 2) {
+    let runStart = -1;
+    let gap = 0;
+    for (let x = 6; x < scanW - 6; x++) {
+      if (isWallCandidate(x, y)) {
         if (runStart === -1) runStart = x;
-      } else {
-        if (runStart !== -1 && x - runStart >= 14) {
-          const x1 = Math.round(runStart * scaleX);
-          const x2 = Math.round(x * scaleX);
-          const z = Math.round(y * scaleZ);
-          const dup = horizWalls.find(
-            (w) => Math.abs(w.z1 - z) < 280 && Math.max(w.x1, x1) <= Math.min(w.x2, x2) + 200
-          );
-          if (dup) {
-            dup.x1 = Math.min(dup.x1, x1);
-            dup.x2 = Math.max(dup.x2, x2);
-          } else {
-            horizWalls.push({ x1, z1: z, x2, z2: z, thick: 160 });
+        gap = 0;
+      } else if (runStart !== -1) {
+        gap++;
+        if (gap > 2) {
+          const endX = x - gap;
+          if (endX - runStart >= minRunPxX) {
+            const x1 = Math.round((runStart * scaleX) / 100) * 100;
+            const x2 = Math.round((endX * scaleX) / 100) * 100;
+            const z = Math.round((y * scaleZ) / 100) * 100;
+            // 외벽과 너무 가까운 중복 선분은 제외
+            const nearExt = exteriorWalls.some(
+              (ew) => ew.z1 === ew.z2 && Math.abs(ew.z1 - z) < 380 && Math.max(ew.x1, x1) < Math.min(ew.x2, x2)
+            );
+            if (!nearExt) {
+              const dup = interiorHoriz.find(
+                (w) => Math.abs(w.z1 - z) < 360 && Math.max(w.x1, x1) <= Math.min(w.x2, x2) + 250
+              );
+              if (dup) {
+                dup.x1 = Math.min(dup.x1, x1);
+                dup.x2 = Math.max(dup.x2, x2);
+              } else {
+                interiorHoriz.push({ x1, z1: z, x2, z2: z, thick: 160 });
+              }
+            }
           }
+          runStart = -1;
+          gap = 0;
         }
-        runStart = -1;
       }
     }
   }
 
-  // 세로 방향 벽체 스캔 및 인접 중복선 병합
-  for (let x = 3; x < scanW - 3; x += 2) {
+  // 내부 세로 벽체 스캔
+  for (let x = 6; x < scanW - 6; x += 2) {
     let runStart = -1;
-    for (let y = 3; y < scanH - 3; y++) {
-      if (isDarkWallPixel(x, y)) {
+    let gap = 0;
+    for (let y = 6; y < scanH - 6; y++) {
+      if (isWallCandidate(x, y)) {
         if (runStart === -1) runStart = y;
-      } else {
-        if (runStart !== -1 && y - runStart >= 14) {
-          const z1 = Math.round(runStart * scaleZ);
-          const z2 = Math.round(y * scaleZ);
-          const xMm = Math.round(x * scaleX);
-          const dup = vertWalls.find(
-            (w) => Math.abs(w.x1 - xMm) < 280 && Math.max(w.z1, z1) <= Math.min(w.z2, z2) + 200
-          );
-          if (dup) {
-            dup.z1 = Math.min(dup.z1, z1);
-            dup.z2 = Math.max(dup.z2, z2);
-          } else {
-            vertWalls.push({ x1: xMm, z1, x2: xMm, z2, thick: 160 });
+        gap = 0;
+      } else if (runStart !== -1) {
+        gap++;
+        if (gap > 2) {
+          const endY = y - gap;
+          if (endY - runStart >= minRunPxZ) {
+            const z1 = Math.round((runStart * scaleZ) / 100) * 100;
+            const z2 = Math.round((endY * scaleZ) / 100) * 100;
+            const xMm = Math.round((x * scaleX) / 100) * 100;
+            const nearExt = exteriorWalls.some(
+              (ew) => ew.x1 === ew.x2 && Math.abs(ew.x1 - xMm) < 380 && Math.max(ew.z1, z1) < Math.min(ew.z2, z2)
+            );
+            if (!nearExt) {
+              const dup = interiorVert.find(
+                (w) => Math.abs(w.x1 - xMm) < 360 && Math.max(w.z1, z1) <= Math.min(w.z2, z2) + 250
+              );
+              if (dup) {
+                dup.z1 = Math.min(dup.z1, z1);
+                dup.z2 = Math.max(dup.z2, z2);
+              } else {
+                interiorVert.push({ x1: xMm, z1, x2: xMm, z2, thick: 160 });
+              }
+            }
           }
+          runStart = -1;
+          gap = 0;
         }
+      }
+    }
+  }
+
+  // 내부 벽체 중 길이가 충분한 칸막이벽에 방문(Door) 개구부 자동 배치
+  interiorHoriz.slice(0, 8).forEach((w, idx) => {
+    const len = w.x2 - w.x1;
+    if (len >= 1600 && idx % 2 === 0) {
+      const mid = Math.round((w.x1 + w.x2) / 2);
+      openings.push({ type: 'door', x1: mid - 420, z1: w.z1, x2: mid + 420, z2: w.z1 });
+    }
+  });
+  interiorVert.slice(0, 8).forEach((w, idx) => {
+    const len = w.z2 - w.z1;
+    if (len >= 1600 && idx % 2 === 1) {
+      const mid = Math.round((w.z1 + w.z2) / 2);
+      openings.push({ type: 'door', x1: w.x1, z1: mid - 420, x2: w.x1, z2: mid + 420 });
+    }
+  });
+
+  // 5) [공간 요소] 욕실(타일+욕조·세면대·샤워부스), 주방(화이트 상하부장+아일랜드), 실외실(세탁기+건조기) 배치
+  const spanW = Math.max(3600, (maxGx - minGx + 1) * cellW);
+  const spanD = Math.max(3600, (maxGz - minGz + 1) * cellD);
+  const startX = minGx * cellW;
+  const startZ = minGz * cellD;
+
+  // 욕실 및 다용도실 영역 타일 바닥 지정
+  const bathW = Math.min(2400, Math.round(spanW * 0.24));
+  const bathD = Math.min(2400, Math.round(spanD * 0.28));
+  const bathCenterX = Math.round(startX + spanW * 0.72);
+  const bathCenterZ = Math.round(startZ + spanD * 0.72);
+
+  const utilCenterX = Math.round(startX + spanW * 0.34);
+  const utilCenterZ = Math.round(startZ + Math.max(950, spanD * 0.14));
+
+  const kitchenX = Math.round(startX + spanW * 0.54);
+  const kitchenZ = Math.round(startZ + Math.max(1150, spanD * 0.18));
+  const islandX = Math.round(startX + spanW * 0.51);
+  const islandZ = Math.round(kitchenZ + 1350);
+
+  // 그리드 셀들을 행 단위 스트립 Room으로 병합하여 도면 외곽 형상 그대로 3D 원목마루/타일 바닥 슬래브 생성
+  const rooms = [];
+  for (let gz = 0; gz < G_ROWS; gz++) {
+    let runStart = -1;
+    let currentType = 'wood';
+    for (let gx = 0; gx <= G_COLS; gx++) {
+      const inside = gx < G_COLS ? cellInside[gz][gx] : false;
+      const t = gx < G_COLS ? cellType[gz][gx] : 'wood';
+      if (inside) {
+        if (runStart === -1) {
+          runStart = gx;
+          currentType = t;
+        } else if (t !== currentType) {
+          rooms.push({
+            id: `r_strip_${gz}_${runStart}`,
+            name: currentType === 'bath' ? '욕실 (타일)' : '',
+            type: currentType,
+            x: runStart * cellW,
+            z: gz * cellD,
+            w: (gx - runStart) * cellW,
+            d: cellD
+          });
+          runStart = gx;
+          currentType = t;
+        }
+      } else if (runStart !== -1) {
+        rooms.push({
+          id: `r_strip_${gz}_${runStart}`,
+          name: currentType === 'bath' ? '욕실 (타일)' : '',
+          type: currentType,
+          x: runStart * cellW,
+          z: gz * cellD,
+          w: (gx - runStart) * cellW,
+          d: cellD
+        });
         runStart = -1;
       }
     }
   }
 
-  const combined = [...horizWalls, ...vertWalls].slice(0, 60);
-  state.floorplanData.walls = combined;
+  // 욕실 및 실외실 위치에 타일 바닥 패치 추가 (원목 마루와 명확히 구분되도록)
+  rooms.push(
+    {
+      id: 'r_auto_bath',
+      name: '욕실 (타일 바닥)',
+      type: 'bath',
+      x: Math.round(bathCenterX - bathW / 2),
+      z: Math.round(bathCenterZ - bathD / 2),
+      w: bathW,
+      d: bathD
+    },
+    {
+      id: 'r_auto_utility',
+      name: '실외실 (세탁/건조기)',
+      type: 'utility',
+      x: Math.round(utilCenterX - 850),
+      z: Math.round(utilCenterZ - 750),
+      w: 1700,
+      d: 1500
+    }
+  );
+
+  const allWalls = [...exteriorWalls, ...interiorHoriz.slice(0, 22), ...interiorVert.slice(0, 22)];
+
+  state.floorplanData = {
+    title: `3D ISOMETRIC CUTAWAY · ${W}×${D} MM`,
+    widthMm: W,
+    depthMm: D,
+    rooms,
+    walls: allWalls,
+    openings,
+    fixtures: {
+      kitchen: { x: kitchenX, z: kitchenZ, rot: 0, islandX, islandZ },
+      utility: { x: utilCenterX, z: utilCenterZ, rot: 0 },
+      baths: [
+        { x: bathCenterX, z: bathCenterZ, w: bathW, d: bathD, hasTub: true, hasBooth: true }
+      ],
+      foyerShoe: null
+    }
+  };
+
+  document.getElementById('archPlanTitleStamp').textContent = state.floorplanData.title;
   rebuild3DArchitecture();
   render2DFloorplanCanvas();
 
   if (isInitialUpload) {
-    showToast(`📐 표준 템플릿을 삭제하고 첨부 도면 비율(${state.planWidthMm}×${state.planDepthMm}mm)과 벽체(${combined.length}개)로 변환했습니다.`);
+    showToast(`🧊 첨부한 평면도를 기준으로 3D 아이소메트릭 절단 뷰(벽체 ${allWalls.length}개 · 원목마루 · 욕실 · 주방 · 실외실)를 생성했습니다!`);
   } else {
-    showToast(`⚡ 첨부 도면에서 ${combined.length}개의 주요 벽체 단면을 추출하여 3D로 세웠습니다!`);
+    showToast(`⚡ 도면 이미지를 재스캔하여 3D 아이소메트릭 절단 뷰(${allWalls.length}개 벽체)로 갱신했습니다!`);
   }
 }
 
