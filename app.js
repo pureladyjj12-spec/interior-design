@@ -382,14 +382,6 @@ function rebuild3DArchitecture() {
   const plan = state.floorplanData;
   if (!plan) return;
 
-  const hasArchitectureContent = Boolean(
-    state.uploadedFloorplanTexture ||
-      (plan.rooms && plan.rooms.length > 0) ||
-      (plan.walls && plan.walls.length > 0) ||
-      state.placedItems.length > 0
-  );
-  document.getElementById('emptyFloorplanPrompt')?.classList.toggle('hidden', hasArchitectureContent);
-
   state.planWidthMm = plan.widthMm;
   state.planDepthMm = plan.depthMm;
 
@@ -988,14 +980,6 @@ function buildPlacedFurniture3D() {
 
   updatePlacedListUI();
   updateInspectorUI();
-  const plan = state.floorplanData;
-  const hasContent = Boolean(
-    state.uploadedFloorplanTexture ||
-      (plan?.rooms && plan.rooms.length > 0) ||
-      (plan?.walls && plan.walls.length > 0) ||
-      state.placedItems.length > 0
-  );
-  document.getElementById('emptyFloorplanPrompt')?.classList.toggle('hidden', hasContent);
 }
 
 function createItem3DMesh(item) {
