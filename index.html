@@ -126,7 +126,8 @@
                 <span id="floorplanRatioText">비율 1.28 : 1 (11,400 × 8,900 mm)</span>
                 <div class="uploaded-btn-row">
                   <button type="button" class="btn-xs btn-accent" id="btnAutoTraceFloorplan">⚡ 벽체 자동 추출</button>
-                  <button type="button" class="btn-xs" id="btnEdit2DFloorplan">📐 도면 위 벽/창호 편집</button>
+                  <button type="button" class="btn-xs" id="btnClearCustomWalls">🧹 벽체 비우기</button>
+                  <button type="button" class="btn-xs" id="btnEdit2DFloorplan">📐 도면 편집</button>
                   <button type="button" class="btn-xs btn-danger" id="btnRemoveFloorplan">제거</button>
                 </div>
               </div>
@@ -148,14 +149,14 @@
           <div class="slider-group mt-8" id="floorplanOverlayControl">
             <div class="slider-label-row">
               <label for="sliderPlanOpacity">첨부 도면 바닥 오버레이 농도</label>
-              <span id="valPlanOpacity">45%</span>
+              <span id="valPlanOpacity">85%</span>
             </div>
-            <input type="range" id="sliderPlanOpacity" min="0" max="100" value="45" />
+            <input type="range" id="sliderPlanOpacity" min="0" max="100" value="85" />
           </div>
         </div>
 
-        <!-- 평면도 구조 프리셋 -->
-        <div class="panel-card">
+        <!-- 평면도 구조 프리셋 (도면 파일/이미지 첨부 시 자동 삭제/숨김 처리됨) -->
+        <div class="panel-card" id="presetTemplateCard">
           <div class="card-header">
             <h2>🏢 표준 평면도 템플릿</h2>
             <span class="tag-pill">즉시 변환</span>

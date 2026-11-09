@@ -31,7 +31,7 @@ const state = {
   uploadedFloorplanUrl: null,
   uploadedFloorplanImg: null,
   uploadedFloorplanTexture: null,
-  floorplanOpacity: 0.45,
+  floorplanOpacity: 0.85,
 
   // 현재 도면 공간 데이터 (방, 벽체, 창호, 빌트인)
   floorplanData: null,
@@ -1554,6 +1554,7 @@ function handleFloorplanImageUpload(file) {
     img.onload = () => {
       state.uploadedFloorplanUrl = dataUrl;
       state.uploadedFloorplanImg = img;
+      state.currentPreset = 'CUSTOM';
 
       // [규칙] 도면의 공간 구성과 비율을 정확히 유지할 것
       const aspect = img.naturalWidth / img.naturalHeight;
@@ -1564,14 +1565,43 @@ function handleFloorplanImageUpload(file) {
       state.planDepthMm = calcDepthMm;
       document.getElementById('inputPlanDepthMm').value = calcDepthMm;
 
-      // 현재 도면 데이터의 가로/세로 스케일을 첨부 도면 비율에 맞게 자동 리스케일
-      rescaleFloorplanToDimensions(baseWidthMm, calcDepthMm);
+      // 1) 기존 표준 평면도 템플릿 UI 카드 삭제(숨김) 및 선택 해제
+      document.getElementById('presetTemplateCard')?.classList.add('hidden');
+      document.querySelectorAll('.preset-card').forEach((c) => c.classList.remove('active'));
 
-      // Three.js 텍스처 생성
+      // 2) 기존 표준 평면도 템플릿의 3D 데이터(방, 벽체, 창호, 빌트인) 완전히 삭제 후 첨부 도면 전용 베이스 생성
+      state.floorplanData = {
+        title: `CUSTOM FLOOR PLAN (${file.name.toUpperCase()}) · ${baseWidthMm}×${calcDepthMm} MM`,
+        widthMm: baseWidthMm,
+        depthMm: calcDepthMm,
+        rooms: [
+          {
+            id: 'r_custom_base',
+            name: '첨부 도면 베이스',
+            type: 'wood',
+            x: 0,
+            z: 0,
+            w: baseWidthMm,
+            d: calcDepthMm
+          }
+        ],
+        walls: [],
+        openings: [],
+        fixtures: null
+      };
+
+      // Three.js 텍스처 생성 및 오버레이 농도 설정
       const tex = new THREE.Texture(img);
       tex.needsUpdate = true;
       tex.colorSpace = THREE.SRGBColorSpace;
       state.uploadedFloorplanTexture = tex;
+      if (state.floorplanOpacity < 0.7) {
+        state.floorplanOpacity = 0.85;
+        const opSlider = document.getElementById('sliderPlanOpacity');
+        const opVal = document.getElementById('valPlanOpacity');
+        if (opSlider) opSlider.value = 85;
+        if (opVal) opVal.textContent = '85%';
+      }
 
       // UI 업데이트
       document.getElementById('floorplanDropContent').classList.add('hidden');
@@ -1581,12 +1611,10 @@ function handleFloorplanImageUpload(file) {
       document.getElementById('floorplanRatioText').textContent =
         `비율 ${aspect.toFixed(2)} : 1 (${baseWidthMm.toLocaleString()} × ${calcDepthMm.toLocaleString()} mm)`;
 
-      document.getElementById('archPlanTitleStamp').textContent =
-        `CUSTOM FLOOR PLAN (${file.name.toUpperCase()}) · ${baseWidthMm}×${calcDepthMm} MM`;
+      document.getElementById('archPlanTitleStamp').textContent = state.floorplanData.title;
 
-      rebuild3DArchitecture();
-      render2DFloorplanCanvas();
-      showToast('📐 첨부 도면의 가로·세로 비율을 측정하여 3D 아이소메트릭 바닥면에 반영했습니다.');
+      // 3) 첨부된 도면 이미지로부터 벽체 단면을 자동 스캔하여 3D로 생성
+      autoTraceWallsFromUploadedImage(true);
     };
     img.src = dataUrl;
   };
@@ -1647,16 +1675,16 @@ function rescaleFloorplanToDimensions(newW, newD) {
   }
 }
 
-/* 첨부 도면 이미지의 어두운 벽체 선분을 스캔하여 3D 절단 벽체로 자동 추출 */
-function autoTraceWallsFromUploadedImage() {
+/* 첨부 도면 이미지의 어두운 벽체 선분을 스캔·병합하여 3D 절단 벽체로 자동 추출 */
+function autoTraceWallsFromUploadedImage(isInitialUpload = false) {
   if (!state.uploadedFloorplanImg) {
     showToast('먼저 도면 이미지를 첨부해 주세요.');
     return;
   }
 
   const img = state.uploadedFloorplanImg;
-  const scanW = 160;
-  const scanH = Math.round(scanW * (img.naturalHeight / img.naturalWidth));
+  const scanW = 200;
+  const scanH = Math.max(60, Math.round(scanW * (img.naturalHeight / img.naturalWidth)));
   const offCanvas = document.createElement('canvas');
   offCanvas.width = scanW;
   offCanvas.height = scanH;
@@ -1664,68 +1692,80 @@ function autoTraceWallsFromUploadedImage() {
   ctx.drawImage(img, 0, 0, scanW, scanH);
   const imgData = ctx.getImageData(0, 0, scanW, scanH).data;
 
-  const isDark = (x, y) => {
+  const isDarkWallPixel = (x, y) => {
     const idx = (y * scanW + x) * 4;
     const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2], a = imgData[idx + 3];
-    if (a < 100) return false;
+    if (a < 90) return false;
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    return lum < 92; // 도면의 진한 벽체 라인 감지
+    return lum < 105; // 도면의 진한 벽체 단면 감지
   };
 
-  const extractedWalls = [];
   const scaleX = state.planWidthMm / scanW;
   const scaleZ = state.planDepthMm / scanH;
+  const horizWalls = [];
+  const vertWalls = [];
 
-  // 가로 벽체 스캔
-  for (let y = 4; y < scanH - 4; y += 3) {
+  // 가로 방향 벽체 스캔 및 인접 중복선 병합
+  for (let y = 3; y < scanH - 3; y += 2) {
     let runStart = -1;
-    for (let x = 4; x < scanW - 4; x++) {
-      if (isDark(x, y) && isDark(x, y + 1)) {
+    for (let x = 3; x < scanW - 3; x++) {
+      if (isDarkWallPixel(x, y)) {
         if (runStart === -1) runStart = x;
       } else {
         if (runStart !== -1 && x - runStart >= 14) {
-          extractedWalls.push({
-            x1: Math.round(runStart * scaleX),
-            z1: Math.round(y * scaleZ),
-            x2: Math.round(x * scaleX),
-            z2: Math.round(y * scaleZ),
-            thick: 160
-          });
+          const x1 = Math.round(runStart * scaleX);
+          const x2 = Math.round(x * scaleX);
+          const z = Math.round(y * scaleZ);
+          const dup = horizWalls.find(
+            (w) => Math.abs(w.z1 - z) < 280 && Math.max(w.x1, x1) <= Math.min(w.x2, x2) + 200
+          );
+          if (dup) {
+            dup.x1 = Math.min(dup.x1, x1);
+            dup.x2 = Math.max(dup.x2, x2);
+          } else {
+            horizWalls.push({ x1, z1: z, x2, z2: z, thick: 160 });
+          }
         }
         runStart = -1;
       }
     }
   }
 
-  // 세로 벽체 스캔
-  for (let x = 4; x < scanW - 4; x += 3) {
+  // 세로 방향 벽체 스캔 및 인접 중복선 병합
+  for (let x = 3; x < scanW - 3; x += 2) {
     let runStart = -1;
-    for (let y = 4; y < scanH - 4; y++) {
-      if (isDark(x, y) && isDark(x + 1, y)) {
+    for (let y = 3; y < scanH - 3; y++) {
+      if (isDarkWallPixel(x, y)) {
         if (runStart === -1) runStart = y;
       } else {
         if (runStart !== -1 && y - runStart >= 14) {
-          extractedWalls.push({
-            x1: Math.round(x * scaleX),
-            z1: Math.round(runStart * scaleZ),
-            x2: Math.round(x * scaleX),
-            z2: Math.round(y * scaleZ),
-            thick: 160
-          });
+          const z1 = Math.round(runStart * scaleZ);
+          const z2 = Math.round(y * scaleZ);
+          const xMm = Math.round(x * scaleX);
+          const dup = vertWalls.find(
+            (w) => Math.abs(w.x1 - xMm) < 280 && Math.max(w.z1, z1) <= Math.min(w.z2, z2) + 200
+          );
+          if (dup) {
+            dup.z1 = Math.min(dup.z1, z1);
+            dup.z2 = Math.max(dup.z2, z2);
+          } else {
+            vertWalls.push({ x1: xMm, z1, x2: xMm, z2, thick: 160 });
+          }
         }
         runStart = -1;
       }
     }
   }
 
-  if (extractedWalls.length >= 4) {
-    // 중복 근접 벽체 병합 후 적용 (최대 38개 주요 벽체 유지)
-    state.floorplanData.walls = extractedWalls.slice(0, 38);
-    rebuild3DArchitecture();
-    render2DFloorplanCanvas();
-    showToast(`⚡ 도면 이미지에서 ${state.floorplanData.walls.length}개의 주요 벽체 단면을 추출하여 3D로 세웠습니다!`);
+  const combined = [...horizWalls, ...vertWalls].slice(0, 60);
+  state.floorplanData.walls = combined;
+  rebuild3DArchitecture();
+  render2DFloorplanCanvas();
+
+  if (isInitialUpload) {
+    showToast(`📐 표준 템플릿을 삭제하고 첨부 도면 비율(${state.planWidthMm}×${state.planDepthMm}mm)과 벽체(${combined.length}개)로 변환했습니다.`);
   } else {
-    showToast('도면의 벽체 명암이 옅어 현재 표준 벽체 구성을 도면 비율에 맞춰 정렬했습니다.');
+    showToast(`⚡ 첨부 도면에서 ${combined.length}개의 주요 벽체 단면을 추출하여 3D로 세웠습니다!`);
   }
 }
 
@@ -2262,7 +2302,19 @@ function bindUIEvents() {
 
   document.getElementById('btnAutoTraceFloorplan')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    autoTraceWallsFromUploadedImage();
+    autoTraceWallsFromUploadedImage(false);
+  });
+
+  document.getElementById('btnClearCustomWalls')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (state.floorplanData) {
+      state.floorplanData.walls = [];
+      state.floorplanData.openings = [];
+      state.floorplanData.fixtures = null;
+      rebuild3DArchitecture();
+      render2DFloorplanCanvas();
+      showToast('🧹 추출된 벽체를 모두 비우고 첨부 도면 바닥면만 남겼습니다.');
+    }
   });
 
   document.getElementById('btnEdit2DFloorplan')?.addEventListener('click', (e) => {
@@ -2275,11 +2327,25 @@ function bindUIEvents() {
     state.uploadedFloorplanUrl = null;
     state.uploadedFloorplanImg = null;
     state.uploadedFloorplanTexture = null;
+    document.getElementById('floorplanFileInput').value = '';
+    document.getElementById('quickFloorplanInput').value = '';
     document.getElementById('floorplanDropContent').classList.remove('hidden');
     document.getElementById('floorplanPreviewBox').classList.add('hidden');
+
+    // 첨부 도면 제거 시 표준 평면도 템플릿 복원
+    document.getElementById('presetTemplateCard')?.classList.remove('hidden');
+    state.currentPreset = '84A';
+    state.floorplanData = getPresetFloorplan('84A');
+    document.querySelectorAll('.preset-card').forEach((c) => {
+      c.classList.toggle('active', c.dataset.planPreset === '84A');
+    });
+    document.getElementById('inputPlanWidthMm').value = state.floorplanData.widthMm;
+    document.getElementById('inputPlanDepthMm').value = state.floorplanData.depthMm;
+    document.getElementById('archPlanTitleStamp').textContent = state.floorplanData.title;
+
     rebuild3DArchitecture();
     render2DFloorplanCanvas();
-    showToast('첨부 도면 오버레이를 제거했습니다.');
+    showToast('첨부 도면을 제거하고 기본 평면도 템플릿을 복원했습니다.');
   });
 
   // 도면 가로/세로 전체 치수 변경

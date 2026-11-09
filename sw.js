@@ -1,4 +1,4 @@
-const CACHE_NAME = 'archicut-3d-v1';
+const CACHE_NAME = 'archicut-3d-v2';
 const ASSETS = [
   './',
   './index.html',
