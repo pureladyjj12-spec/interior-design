@@ -155,28 +155,6 @@
           </div>
         </div>
 
-        <!-- 평면도 구조 프리셋 (도면 파일/이미지 첨부 시 자동 삭제/숨김 처리됨) -->
-        <div class="panel-card" id="presetTemplateCard">
-          <div class="card-header">
-            <h2>🏢 표준 평면도 템플릿</h2>
-            <span class="tag-pill">즉시 변환</span>
-          </div>
-          <div class="preset-grid">
-            <button type="button" class="preset-card active" data-plan-preset="84A">
-              <strong>84㎡ 표준 판상형 (기본)</strong>
-              <span>거실·주방(아일랜드)·침실3·욕실2·실외실·발코니</span>
-            </button>
-            <button type="button" class="preset-card" data-plan-preset="59A">
-              <strong>59㎡ 실속 투룸/쓰리룸</strong>
-              <span>거실·주방(아일랜드)·침실2·욕실1·실외실·발코니</span>
-            </button>
-            <button type="button" class="preset-card" data-plan-preset="38S">
-              <strong>38㎡ 스튜디오/오피스텔</strong>
-              <span>오픈 거실/침실·빌트인 주방·욕실·다용도 세탁실</span>
-            </button>
-          </div>
-        </div>
-
         <!-- [규칙] & [공간 요소] & [스타일] 설정 카드 -->
         <div class="panel-card">
           <div class="card-header">
@@ -467,7 +445,7 @@
           <!-- 상단 건축 프레젠테이션 헤더 스탬프 -->
           <div class="arch-Corner-tl">
             <span class="arch-label-main">3D ISOMETRIC CUTAWAY VIEW</span>
-            <span class="arch-label-sub" id="archPlanTitleStamp">84㎡ STANDARD APARTMENT · SCALE 1:100 (UNIT: MM)</span>
+            <span class="arch-label-sub" id="archPlanTitleStamp">FLOOR PLAN NOT ATTACHED · UPLOAD FLOOR PLAN IMAGE</span>
           </div>
 
           <div class="arch-corner-tr">
@@ -476,6 +454,20 @@
 
           <!-- 1) 3D WebGL 캔버스 컨테이너 -->
           <div class="canvas-holder" id="canvas3DHolder">
+            <!-- 도면 미첨부 시 안내 오버레이 -->
+            <div id="emptyFloorplanPrompt" class="empty-floorplan-prompt">
+              <div class="empty-prompt-card">
+                <div class="empty-prompt-icon">📐</div>
+                <h3>평면도 파일 또는 이미지를 첨부해 주세요</h3>
+                <p>
+                  평면도를 첨부하면 도면의 공간 구성과 비율을 그대로 유지하여<br />
+                  <strong>3D 아이소메트릭 절단 뷰(Cutaway View)</strong>를 생성합니다.
+                </p>
+                <label for="quickFloorplanInput" class="btn-primary-full empty-upload-btn">
+                  📂 평면도 파일/이미지 첨부하기
+                </label>
+              </div>
+            </div>
             <!-- Three.js Canvas injected here -->
             <!-- 가구 선택 시 3D 위 플로팅 라벨 오버레이 -->
             <div id="floatingItemBadge" class="floating-item-badge hidden">

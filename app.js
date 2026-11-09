@@ -70,188 +70,17 @@ const QUICK_CATALOG = [
 ];
 
 /* =========================================================================
-   표준 한국형 평면도 템플릿 정의 (단위: mm, 좌상단 (0,0) ~ 우하단 (W, D))
-   - 레퍼런스 이미지(reference-cutaway.jpg)의 공간 구성과 비율을 정밀 재현
+   빈 평면도 초기 상태 생성기 (기존 표준 평면도 템플릿 구조물 제거됨)
    ========================================================================= */
-function getPresetFloorplan(presetKey) {
-  if (presetKey === '59A') {
-    const W = 9600, D = 8200;
-    return {
-      title: '59㎡ COMPACT 3-BAY APARTMENT · SCALE 1:100 (UNIT: MM)',
-      widthMm: W,
-      depthMm: D,
-      rooms: [
-        { id: 'r_foyer', name: '현관', type: 'foyer', x: 0, z: 3600, w: 1500, d: 1800 },
-        { id: 'r_balcony', name: '발코니', type: 'balcony', x: 1500, z: 0, w: 3800, d: 1350 },
-        { id: 'r_living', name: '거실', type: 'wood', x: 1500, z: 1350, w: 4500, d: 6850 },
-        { id: 'r_kitchen', name: '주방', type: 'wood', x: 3800, z: 0, w: 3200, d: 3600 },
-        { id: 'r_utility', name: '실외실/다용도실', type: 'utility', x: 2400, z: 0, w: 1400, d: 2100 },
-        { id: 'r_bed1', name: '안방(침실1)', type: 'wood', x: 6000, z: 1600, w: 3600, d: 3600 },
-        { id: 'r_bed2', name: '침실2', type: 'wood', x: 6000, z: 5200, w: 3600, d: 3000 },
-        { id: 'r_bath1', name: '욕실', type: 'bath', x: 7000, z: 0, w: 2600, d: 1600 }
-      ],
-      walls: [
-        // 외벽
-        { x1: 1500, z1: 0, x2: 9600, z2: 0, thick: 220, ext: true },
-        { x1: 9600, z1: 0, x2: 9600, z2: 8200, thick: 220, ext: true },
-        { x1: 1500, z1: 8200, x2: 9600, z2: 8200, thick: 220, ext: true },
-        { x1: 1500, z1: 5400, x2: 1500, z2: 8200, thick: 220, ext: true },
-        { x1: 0, z1: 3600, x2: 1500, z2: 3600, thick: 220, ext: true },
-        { x1: 0, z1: 3600, x2: 0, z2: 5400, thick: 220, ext: true },
-        { x1: 0, z1: 5400, x2: 1500, z2: 5400, thick: 220, ext: true },
-        { x1: 1500, z1: 0, x2: 1500, z2: 3600, thick: 200, ext: true },
-        // 내벽
-        { x1: 2400, z1: 0, x2: 2400, z2: 2100, thick: 150 },
-        { x1: 2400, z1: 2100, x2: 3800, z2: 2100, thick: 150 },
-        { x1: 3800, z1: 0, x2: 3800, z2: 2100, thick: 150 },
-        { x1: 7000, z1: 0, x2: 7000, z2: 1600, thick: 150 },
-        { x1: 6000, z1: 1600, x2: 9600, z2: 1600, thick: 150 },
-        { x1: 6000, z1: 1600, x2: 6000, z2: 8200, thick: 150 },
-        { x1: 6000, z1: 5200, x2: 9600, z2: 5200, thick: 150 },
-        { x1: 1500, z1: 4800, x2: 3300, z2: 4800, thick: 150 }
-      ],
-      openings: [
-        // 베란다 통창 새시 & 외창 & 방문
-        { type: 'sash', x1: 1500, z1: 1350, x2: 3800, z2: 1350 },
-        { type: 'balcony-rail', x1: 1500, z1: 0, x2: 3800, z2: 0 },
-        { type: 'window', x1: 1500, z1: 5800, x2: 1500, z2: 7800 },
-        { type: 'window', x1: 6600, z1: 8200, x2: 8800, z2: 8200 },
-        { type: 'window', x1: 9600, z1: 2300, x2: 9600, z2: 4300 },
-        { type: 'door', x1: 6000, z1: 2400, x2: 6000, z2: 3300 },
-        { type: 'door', x1: 6000, z1: 5600, x2: 6000, z2: 6500 },
-        { type: 'door', x1: 7000, z1: 600, x2: 7000, z2: 1400 },
-        { type: 'door', x1: 2700, z1: 2100, x2: 3500, z2: 2100 },
-        { type: 'sash', x1: 1500, z1: 3800, x2: 1500, z2: 5200 }
-      ],
-      fixtures: {
-        kitchen: { x: 5200, z: 950, rot: 0, islandX: 5000, islandZ: 2450 },
-        utility: { x: 3100, z: 700, rot: 0 },
-        baths: [
-          { x: 8300, z: 800, w: 2400, d: 1400, hasTub: true, hasBooth: true }
-        ],
-        foyerShoe: { x: 750, z: 3850, w: 1200, d: 380 }
-      }
-    };
-  }
-
-  if (presetKey === '38S') {
-    const W = 7400, D = 6400;
-    return {
-      title: '38㎡ MINIMAL STUDIO LOFT · SCALE 1:100 (UNIT: MM)',
-      widthMm: W,
-      depthMm: D,
-      rooms: [
-        { id: 'r_foyer', name: '현관', type: 'foyer', x: 0, z: 4400, w: 1600, d: 2000 },
-        { id: 'r_utility', name: '실외실/세탁실', type: 'utility', x: 0, z: 2400, w: 1600, d: 2000 },
-        { id: 'r_bath1', name: '욕실', type: 'bath', x: 0, z: 0, w: 2600, d: 2400 },
-        { id: 'r_living', name: '거실/침실 통합', type: 'wood', x: 1600, z: 2400, w: 5800, d: 4000 },
-        { id: 'r_kitchen', name: '주방', type: 'wood', x: 2600, z: 0, w: 4800, d: 2400 }
-      ],
-      walls: [
-        { x1: 0, z1: 0, x2: 7400, z2: 0, thick: 220, ext: true },
-        { x1: 7400, z1: 0, x2: 7400, z2: 6400, thick: 220, ext: true },
-        { x1: 0, z1: 6400, x2: 7400, z2: 6400, thick: 220, ext: true },
-        { x1: 0, z1: 0, x2: 0, z2: 6400, thick: 220, ext: true },
-        { x1: 2600, z1: 0, x2: 2600, z2: 2400, thick: 150 },
-        { x1: 0, z1: 2400, x2: 2600, z2: 2400, thick: 150 },
-        { x1: 1600, z1: 2400, x2: 1600, z2: 6400, thick: 150 },
-        { x1: 0, z1: 4400, x2: 1600, z2: 4400, thick: 150 }
-      ],
-      openings: [
-        { type: 'sash', x1: 2400, z1: 6400, x2: 6600, z2: 6400 },
-        { type: 'window', x1: 7400, z1: 1800, x2: 7400, z2: 4600 },
-        { type: 'door', x1: 2600, z1: 1200, x2: 2600, z2: 2000 },
-        { type: 'door', x1: 1600, z1: 3000, x2: 1600, z2: 3800 },
-        { type: 'sash', x1: 1600, z1: 4800, x2: 1600, z2: 6000 }
-      ],
-      fixtures: {
-        kitchen: { x: 5000, z: 750, rot: 0, islandX: 4800, islandZ: 2150 },
-        utility: { x: 800, z: 3200, rot: Math.PI / 2 },
-        baths: [
-          { x: 1300, z: 1200, w: 2300, d: 2100, hasTub: true, hasBooth: true }
-        ],
-        foyerShoe: { x: 350, z: 5300, w: 360, d: 1300 }
-      }
-    };
-  }
-
-  // 기본 84A 표준 판상형 (레퍼런스 이미지 reference-cutaway.jpg와 완벽히 호환되는 레이아웃)
-  const W = 11200, D = 9200;
+function createEmptyFloorplan(widthMm = 11200, depthMm = 9200) {
   return {
-    title: '84㎡ STANDARD APARTMENT · SCALE 1:100 (UNIT: MM)',
-    widthMm: W,
-    depthMm: D,
-    rooms: [
-      { id: 'r_foyer', name: '현관', type: 'foyer', x: 0, z: 3600, w: 1700, d: 2100 },
-      { id: 'r_balcony', name: '전면 발코니', type: 'balcony', x: 1200, z: 750, w: 3100, d: 1450 },
-      { id: 'r_living', name: '거실 (원목마루)', type: 'wood', x: 1700, z: 2200, w: 5100, d: 7000 },
-      { id: 'r_kitchen', name: '주방 (화이트 빌트인)', type: 'wood', x: 4300, z: 900, w: 3500, d: 3600 },
-      { id: 'r_utility', name: '실외실 (세탁/건조기)', type: 'utility', x: 3000, z: 0, w: 2200, d: 2200 },
-      { id: 'r_bath_sub', name: '욕실 2 (샤워부스)', type: 'bath', x: 7800, z: 900, w: 1600, d: 2200 },
-      { id: 'r_bed1', name: '침실 1 (원목마루)', type: 'wood', x: 7800, z: 3100, w: 3400, d: 3100 },
-      { id: 'r_bath_main', name: '공용 욕실 (욕조/세면대/샤워부스)', type: 'bath', x: 6800, z: 6200, w: 2600, d: 3000 },
-      { id: 'r_bed2', name: '침실 2 (원목마루)', type: 'wood', x: 4200, z: 6200, w: 2600, d: 3000 }
-    ],
-    walls: [
-      // 외벽 라인
-      { x1: 3000, z1: 0, x2: 5200, z2: 0, thick: 220, ext: true },
-      { x1: 5200, z1: 0, x2: 5200, z2: 900, thick: 220, ext: true },
-      { x1: 5200, z1: 900, x2: 9400, z2: 900, thick: 220, ext: true },
-      { x1: 9400, z1: 900, x2: 9400, z2: 3100, thick: 220, ext: true },
-      { x1: 9400, z1: 3100, x2: 11200, z2: 3100, thick: 220, ext: true },
-      { x1: 11200, z1: 3100, x2: 11200, z2: 6200, thick: 220, ext: true },
-      { x1: 9400, z1: 6200, x2: 11200, z2: 6200, thick: 220, ext: true },
-      { x1: 9400, z1: 6200, x2: 9400, z2: 9200, thick: 220, ext: true },
-      { x1: 1700, z1: 9200, x2: 9400, z2: 9200, thick: 220, ext: true },
-      { x1: 1700, z1: 5700, x2: 1700, z2: 9200, thick: 220, ext: true },
-      { x1: 0, z1: 5700, x2: 1700, z2: 5700, thick: 220, ext: true },
-      { x1: 0, z1: 3600, x2: 0, z2: 5700, thick: 220, ext: true },
-      { x1: 0, z1: 3600, x2: 1700, z2: 3600, thick: 220, ext: true },
-      { x1: 1700, z1: 2200, x2: 1700, z2: 3600, thick: 200, ext: true },
-      { x1: 1700, z1: 2200, x2: 3000, z2: 2200, thick: 200, ext: true },
-      { x1: 3000, z1: 0, x2: 3000, z2: 2200, thick: 220, ext: true },
-
-      // 내부 칸막이 벽체 (절단면)
-      { x1: 1700, z1: 4900, x2: 3700, z2: 4900, thick: 160 },
-      { x1: 4300, z1: 900, x2: 4300, z2: 2600, thick: 160 },
-      { x1: 3000, z1: 2200, x2: 4300, z2: 2200, thick: 160 },
-      { x1: 7800, z1: 900, x2: 7800, z2: 4600, thick: 160 },
-      { x1: 6800, z1: 4600, x2: 7800, z2: 4600, thick: 160 },
-      { x1: 7800, z1: 3100, x2: 9400, z2: 3100, thick: 160 },
-      { x1: 4200, z1: 6200, x2: 4200, z2: 9200, thick: 160 },
-      { x1: 4200, z1: 6200, x2: 5600, z2: 6200, thick: 160 },
-      { x1: 6800, z1: 6200, x2: 6800, z2: 9200, thick: 160 },
-      { x1: 6800, z1: 6200, x2: 9400, z2: 6200, thick: 160 }
-    ],
-    openings: [
-      // 발코니 슬라이딩 통창 새시 & 유리 난간
-      { type: 'sash', x1: 1700, z1: 2200, x2: 3000, z2: 2200 },
-      { type: 'sash', x1: 1700, z1: 2200, x2: 1700, z2: 3600 },
-      { type: 'balcony-rail', x1: 1200, z1: 750, x2: 3000, z2: 750 },
-      { type: 'balcony-rail', x1: 1200, z1: 750, x2: 1200, z2: 2200 },
-      // 현관 중문 새시
-      { type: 'sash', x1: 1700, z1: 3800, x2: 1700, z2: 4800 },
-      // 거실 및 각 방 창문
-      { type: 'window', x1: 1700, z1: 6100, x2: 1700, z2: 8600 },
-      { type: 'window', x1: 4600, z1: 9200, x2: 6100, z2: 9200 },
-      { type: 'window', x1: 9400, z1: 3600, x2: 10900, z2: 3600 },
-      { type: 'window', x1: 11200, z1: 3900, x2: 11200, z2: 5500 },
-      { type: 'window', x1: 3000, z1: 400, x2: 3000, z2: 1600 },
-      // 방문 (여닫이 도어)
-      { type: 'door', x1: 3300, z1: 2200, x2: 4100, z2: 2200 },
-      { type: 'door', x1: 6900, z1: 4600, x2: 7700, z2: 4600 },
-      { type: 'door', x1: 5600, z1: 6200, x2: 6400, z2: 6200 },
-      { type: 'door', x1: 7000, z1: 6200, x2: 7800, z2: 6200 }
-    ],
-    fixtures: {
-      kitchen: { x: 6050, z: 1650, rot: 0, islandX: 5650, islandZ: 3050 },
-      utility: { x: 4100, z: 850, rot: 0 },
-      baths: [
-        { x: 8100, z: 7700, w: 2400, d: 2700, hasTub: true, hasBooth: true },
-        { x: 8600, z: 2000, w: 1400, d: 1900, hasTub: false, hasBooth: true }
-      ],
-      foyerShoe: { x: 850, z: 3900, w: 1400, d: 400 }
-    }
+    title: 'FLOOR PLAN NOT ATTACHED · UPLOAD FLOOR PLAN IMAGE',
+    widthMm,
+    depthMm,
+    rooms: [],
+    walls: [],
+    openings: [],
+    fixtures: null
   };
 }
 
@@ -552,6 +381,14 @@ function rebuild3DArchitecture() {
 
   const plan = state.floorplanData;
   if (!plan) return;
+
+  const hasArchitectureContent = Boolean(
+    state.uploadedFloorplanTexture ||
+      (plan.rooms && plan.rooms.length > 0) ||
+      (plan.walls && plan.walls.length > 0) ||
+      state.placedItems.length > 0
+  );
+  document.getElementById('emptyFloorplanPrompt')?.classList.toggle('hidden', hasArchitectureContent);
 
   state.planWidthMm = plan.widthMm;
   state.planDepthMm = plan.depthMm;
@@ -1151,6 +988,14 @@ function buildPlacedFurniture3D() {
 
   updatePlacedListUI();
   updateInspectorUI();
+  const plan = state.floorplanData;
+  const hasContent = Boolean(
+    state.uploadedFloorplanTexture ||
+      (plan?.rooms && plan.rooms.length > 0) ||
+      (plan?.walls && plan.walls.length > 0) ||
+      state.placedItems.length > 0
+  );
+  document.getElementById('emptyFloorplanPrompt')?.classList.toggle('hidden', hasContent);
 }
 
 function createItem3DMesh(item) {
@@ -2332,20 +2177,16 @@ function bindUIEvents() {
     document.getElementById('floorplanDropContent').classList.remove('hidden');
     document.getElementById('floorplanPreviewBox').classList.add('hidden');
 
-    // 첨부 도면 제거 시 표준 평면도 템플릿 복원
-    document.getElementById('presetTemplateCard')?.classList.remove('hidden');
-    state.currentPreset = '84A';
-    state.floorplanData = getPresetFloorplan('84A');
-    document.querySelectorAll('.preset-card').forEach((c) => {
-      c.classList.toggle('active', c.dataset.planPreset === '84A');
-    });
+    // 첨부 도면 제거 시 빈 초기 상태로 초기화 (표준 평면도 템플릿 없음)
+    state.currentPreset = 'EMPTY';
+    state.floorplanData = createEmptyFloorplan(11200, 9200);
     document.getElementById('inputPlanWidthMm').value = state.floorplanData.widthMm;
     document.getElementById('inputPlanDepthMm').value = state.floorplanData.depthMm;
     document.getElementById('archPlanTitleStamp').textContent = state.floorplanData.title;
 
     rebuild3DArchitecture();
     render2DFloorplanCanvas();
-    showToast('첨부 도면을 제거하고 기본 평면도 템플릿을 복원했습니다.');
+    showToast('첨부 도면을 제거하고 초기 빈 공간 상태로 초기화했습니다.');
   });
 
   // 도면 가로/세로 전체 치수 변경
@@ -2365,24 +2206,6 @@ function bindUIEvents() {
     state.floorplanOpacity = v / 100;
     document.getElementById('valPlanOpacity').textContent = `${v}%`;
     rebuild3DArchitecture();
-  });
-
-  // 표준 평면도 템플릿 선택
-  document.querySelectorAll('.preset-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.preset-card').forEach((c) => c.classList.remove('active'));
-      card.classList.add('active');
-      const key = card.dataset.planPreset;
-      state.currentPreset = key;
-      state.floorplanData = getPresetFloorplan(key);
-      document.getElementById('inputPlanWidthMm').value = state.floorplanData.widthMm;
-      document.getElementById('inputPlanDepthMm').value = state.floorplanData.depthMm;
-      document.getElementById('archPlanTitleStamp').textContent = state.floorplanData.title;
-      rebuild3DArchitecture();
-      buildPlacedFurniture3D();
-      render2DFloorplanCanvas();
-      showToast(`🏢 [${card.querySelector('strong').textContent}] 평면도로 전환했습니다.`);
-    });
   });
 
   // [규칙/공간요소/스타일] 건축 옵션 컨트롤
@@ -2727,7 +2550,7 @@ function bindUIEvents() {
    초기 부트스트랩 실행
    ========================================================================= */
 window.addEventListener('DOMContentLoaded', () => {
-  state.floorplanData = getPresetFloorplan('84A');
+  state.floorplanData = createEmptyFloorplan(11200, 9200);
   loadStateFromLocal();
   initThreeScene();
   rebuild3DArchitecture();
