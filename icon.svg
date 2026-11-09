@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#FFFFFF"/>
+  <rect x="20" y="20" width="472" height="472" rx="80" fill="#FAFAFA" stroke="#1E1E1E" stroke-width="6"/>
+  <!-- Isometric Floor Base -->
+  <polygon points="256,396 96,304 256,212 416,304" fill="#DFC39D" stroke="#1E1E1E" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Isometric Left Back Wall Cutaway -->
+  <polygon points="96,304 96,176 256,84 256,212" fill="#F2F2F0" stroke="#1E1E1E" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Isometric Right Back Wall Cutaway -->
+  <polygon points="256,212 256,84 416,176 416,304" fill="#E6E5E2" stroke="#1E1E1E" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Interior Partition Wall -->
+  <polygon points="176,258 176,162 296,231 296,327" fill="#FFFFFF" stroke="#1E1E1E" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Kitchen Island Box -->
+  <polygon points="256,336 206,307 256,278 306,307" fill="#FFFFFF" stroke="#1E1E1E" stroke-width="6" stroke-linejoin="round"/>
+  <polygon points="206,307 206,274 256,303 256,336" fill="#F5F5F5" stroke="#1E1E1E" stroke-width="6" stroke-linejoin="round"/>
+  <polygon points="256,336 256,303 306,274 306,307" fill="#E8E8E8" stroke="#1E1E1E" stroke-width="6" stroke-linejoin="round"/>
+</svg>
+

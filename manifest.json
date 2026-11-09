@@ -1,0 +1,19 @@
+{
+  "name": "ARCHI-CUT 3D | 아이소메트릭 인테리어 스튜디오",
+  "short_name": "ARCHI-CUT 3D",
+  "description": "도면 기반 3D 아이소메트릭 절단 뷰(Cutaway View) 생성 및 실측 가구·가전·소품 배치 웹/모바일 앱",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

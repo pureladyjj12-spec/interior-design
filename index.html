@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ARCHI-CUT 3D" />
+  <meta name="description" content="도면 기반 3D 아이소메트릭 절단 뷰(Cutaway View) 생성 및 실측 가구·가전·소품 인테리어 배치 웹/앱" />
+  <title>ARCHI-CUT 3D | 아이소메트릭 절단 뷰 인테리어 스튜디오</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+  <!-- Three.js ES Module Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- 상단 헤더 바 -->
+  <header class="app-header">
+    <div class="brand-group">
+      <div class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 36 36" width="28" height="28">
+          <polygon points="18,30 4,22 18,14 32,22" fill="#E3C79F" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+          <polygon points="4,22 4,11 18,3 18,14" fill="#F4F4F2" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+          <polygon points="18,14 18,3 32,11 32,22" fill="#E6E5E2" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="brand-titles">
+        <h1>ARCHI-CUT <span class="badge-minimal">3D ISOMETRIC</span></h1>
+        <p class="subtitle">건축 아이소메트릭 절단 뷰 &amp; 실측 인테리어 스튜디오</p>
+      </div>
+    </div>
+
+    <!-- 중앙 뷰 모드 전환 탭 -->
+    <nav class="mode-switcher" aria-label="뷰어 모드 전환">
+      <button type="button" class="mode-btn active" data-view-mode="3d" id="btnMode3D">
+        <span class="mode-icon">🧊</span>
+        <span>3D 아이소메트릭 절단 뷰</span>
+      </button>
+      <button type="button" class="mode-btn" data-view-mode="2d" id="btnMode2D">
+        <span class="mode-icon">📐</span>
+        <span>도면/공간 편집 (2D→3D)</span>
+      </button>
+      <button type="button" class="mode-btn" data-view-mode="ref" id="btnModeRef">
+        <span class="mode-icon">🏛️</span>
+        <span>건축 렌더링 레퍼런스</span>
+      </button>
+    </nav>
+
+    <!-- 우측 퀵 액션 -->
+    <div class="header-actions">
+      <label for="quickFloorplanInput" class="action-btn btn-outline" title="도면 이미지 첨부">
+        <span>📂 도면 첨부</span>
+      </label>
+      <input type="file" id="quickFloorplanInput" accept="image/*" hidden />
+
+      <button type="button" class="action-btn btn-outline" id="btnExportPNG" title="건축 프레젠테이션 고화질 이미지 저장">
+        <span>📸 렌더링 저장</span>
+      </button>
+
+      <button type="button" class="action-btn btn-dark" id="btnAppInstall" title="안드로이드 & 아이폰 앱 설치 및 모바일 사용 안내">
+        <span>📱 모바일/앱</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 메인 워크스페이스 -->
+  <main class="workspace">
+    <!-- 좌측 컨트롤 사이드바 (모바일에서는 바텀 시트로 동작) -->
+    <aside class="control-sidebar" id="controlSidebar">
+      <!-- 모바일 드래그 핸들 -->
+      <div class="sheet-handle-bar" id="sheetHandleBar">
+        <div class="sheet-pill"></div>
+        <span class="sheet-title-mobile">도면 · 가구/가전/소품 · 건축 설정</span>
+        <button type="button" class="sheet-toggle-btn" id="btnToggleSheet" aria-label="패널 접기/펼치기">▼</button>
+      </div>
+
+      <!-- 사이드바 탭 네비게이션 -->
+      <div class="sidebar-tabs" role="tablist">
+        <button type="button" class="sidebar-tab active" data-tab="tab-floorplan" role="tab" aria-selected="true">
+          <span>1. 도면·공간</span>
+        </button>
+        <button type="button" class="sidebar-tab" data-tab="tab-furniture" role="tab" aria-selected="false">
+          <span>2. 가구·가전·소품</span>
+        </button>
+        <button type="button" class="sidebar-tab" data-tab="tab-inspector" role="tab" aria-selected="false">
+          <span>3. 배치목록 (<strong id="placedCountBadge">0</strong>)</span>
+        </button>
+      </div>
+
+      <!-- 탭 1: 도면 첨부 & 건축 공간 요소 설정 -->
+      <section class="tab-panel active" id="tab-floorplan" role="tabpanel">
+        <!-- 도면 첨부 카드 -->
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>📂 평면도 파일 첨부</h2>
+            <span class="tag-pill">비율 자동 유지</span>
+          </div>
+          <p class="card-desc">
+            평면도 이미지를 첨부하면 도면의 가로·세로 비율을 정확히 유지하여 3D 아이소메트릭 바닥면과 벽체 단면으로 변환합니다.
+          </p>
+
+          <div class="upload-dropzone" id="floorplanDropzone">
+            <input type="file" id="floorplanFileInput" accept="image/*" hidden />
+            <div class="dropzone-content" id="floorplanDropContent">
+              <div class="upload-icon">🗺️</div>
+              <p class="upload-main-text">도면 이미지를 드래그하거나 탭하여 첨부</p>
+              <p class="upload-sub-text">JPG, PNG, WEBP 지원 (모바일 사진 촬영 가능)</p>
+            </div>
+            <div class="uploaded-preview hidden" id="floorplanPreviewBox">
+              <img id="floorplanThumb" alt="첨부된 도면 미리보기" />
+              <div class="uploaded-meta">
+                <strong id="floorplanFileName">floorplan.png</strong>
+                <span id="floorplanRatioText">비율 1.28 : 1 (11,400 × 8,900 mm)</span>
+                <div class="uploaded-btn-row">
+                  <button type="button" class="btn-xs btn-accent" id="btnAutoTraceFloorplan">⚡ 벽체 자동 추출</button>
+                  <button type="button" class="btn-xs" id="btnEdit2DFloorplan">📐 도면 위 벽/창호 편집</button>
+                  <button type="button" class="btn-xs btn-danger" id="btnRemoveFloorplan">제거</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 도면 실측 전체 가로 폭 설정 & 오버레이 투명도 -->
+          <div class="form-row two-col mt-8">
+            <div class="input-group">
+              <label for="inputPlanWidthMm">도면 전체 가로(mm)</label>
+              <input type="number" id="inputPlanWidthMm" value="11200" min="3000" max="30000" step="100" />
+            </div>
+            <div class="input-group">
+              <label for="inputPlanDepthMm">도면 전체 세로(mm)</label>
+              <input type="number" id="inputPlanDepthMm" value="9200" min="3000" max="30000" step="100" />
+            </div>
+          </div>
+
+          <div class="slider-group mt-8" id="floorplanOverlayControl">
+            <div class="slider-label-row">
+              <label for="sliderPlanOpacity">첨부 도면 바닥 오버레이 농도</label>
+              <span id="valPlanOpacity">45%</span>
+            </div>
+            <input type="range" id="sliderPlanOpacity" min="0" max="100" value="45" />
+          </div>
+        </div>
+
+        <!-- 평면도 구조 프리셋 -->
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>🏢 표준 평면도 템플릿</h2>
+            <span class="tag-pill">즉시 변환</span>
+          </div>
+          <div class="preset-grid">
+            <button type="button" class="preset-card active" data-plan-preset="84A">
+              <strong>84㎡ 표준 판상형 (기본)</strong>
+              <span>거실·주방(아일랜드)·침실3·욕실2·실외실·발코니</span>
+            </button>
+            <button type="button" class="preset-card" data-plan-preset="59A">
+              <strong>59㎡ 실속 투룸/쓰리룸</strong>
+              <span>거실·주방(아일랜드)·침실2·욕실1·실외실·발코니</span>
+            </button>
+            <button type="button" class="preset-card" data-plan-preset="38S">
+              <strong>38㎡ 스튜디오/오피스텔</strong>
+              <span>오픈 거실/침실·빌트인 주방·욕실·다용도 세탁실</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- [규칙] & [공간 요소] & [스타일] 설정 카드 -->
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>🏛️ 건축 절단 뷰 규칙 &amp; 공간 요소</h2>
+            <span class="tag-pill">Presentation</span>
+          </div>
+
+          <!-- 벽체 절단 높이 슬라이더 -->
+          <div class="slider-group">
+            <div class="slider-label-row">
+              <label for="sliderWallHeight">벽체 단면 절단 높이 (Cutaway)</label>
+              <span id="valWallHeight">1,450 mm</span>
+            </div>
+            <input type="range" id="sliderWallHeight" min="700" max="2400" step="50" value="1450" />
+          </div>
+
+          <!-- 벽체 단면 캡 색상 & 바닥 마루 톤 -->
+          <div class="form-row two-col mt-8">
+            <div class="input-group">
+              <label for="selectWallCapColor">벽체 상단 단면(Cap)</label>
+              <select id="selectWallCapColor">
+                <option value="#141414" selected>건축 블랙 단면 (#141414)</option>
+                <option value="#3A3A38">차콜 그레이 단면</option>
+                <option value="#E8E6E1">미니멀 화이트 단면</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="selectWoodTone">원목 마루 바닥 톤</label>
+              <select id="selectWoodTone">
+                <option value="bright-oak" selected>밝은 내추럴 오크 (기본)</option>
+                <option value="warm-oak">네추럴 허니 오크</option>
+                <option value="ash-light">소프트 화이트 애쉬</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- [공간 요소] 빌트인 표시 스위치 -->
+          <div class="toggle-list mt-10">
+            <label class="toggle-item">
+              <input type="checkbox" id="chkBathroomFixtures" checked />
+              <span><strong>욕실 요소</strong> (타일 바닥 + 욕조·세면대·샤워부스)</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="chkKitchenFixtures" checked />
+              <span><strong>주방 요소</strong> (화이트 빌트인 상하부장 + 아일랜드)</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="chkUtilityFixtures" checked />
+              <span><strong>실외실 요소</strong> (세탁기 + 건조기 워시타워)</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="chkOpenings" checked />
+              <span><strong>창호 재현</strong> (문 · 창문 · 베란다 통창 새시)</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="chkArchFrame" checked />
+              <span><strong>프레젠테이션</strong> (화이트 배경 + 얇은 테두리 프레임)</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="chkRoomLabels" />
+              <span><strong>공간 명칭 라벨 표시</strong> (거실, 주방, 욕실 등)</span>
+            </label>
+          </div>
+
+          <!-- 자연광 각도 조절 -->
+          <div class="slider-group mt-10">
+            <div class="slider-label-row">
+              <label for="sliderSunAngle">부드러운 자연광 방향 (그림자 각도)</label>
+              <span id="valSunAngle">남서광 42°</span>
+            </div>
+            <input type="range" id="sliderSunAngle" min="0" max="360" step="5" value="42" />
+          </div>
+        </div>
+      </section>
+
+      <!-- 탭 2: 가구 · 가전제품 · 소품 이미지 및 치수 입력 -->
+      <section class="tab-panel" id="tab-furniture" role="tabpanel">
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>➕ 가구 · 가전 · 소품 치수/이미지 등록</h2>
+            <span class="tag-pill">1:1 실측 mm</span>
+          </div>
+          <p class="card-desc">
+            배치할 제품의 사진과 <strong>가로(W) × 깊이(D) × 높이(H) mm</strong> 치수를 입력하면 도면 비율에 맞춘 3D 모델로 즉시 생성됩니다.
+          </p>
+
+          <!-- 카테고리 선택 -->
+          <div class="category-pills" role="radiogroup" aria-label="품목 분류">
+            <button type="button" class="cat-pill active" data-item-cat="furniture">🛋️ 가구</button>
+            <button type="button" class="cat-pill" data-item-cat="appliance">📺 가전제품</button>
+            <button type="button" class="cat-pill" data-item-cat="prop">🪴 소품/데코</button>
+          </div>
+
+          <!-- 이름 및 3D 형태 선택 -->
+          <div class="form-row two-col mt-8">
+            <div class="input-group">
+              <label for="itemNameInput">품목 이름</label>
+              <input type="text" id="itemNameInput" placeholder="예: 모듈 소파, 냉장고" value="미니멀 패브릭 소파" />
+            </div>
+            <div class="input-group">
+              <label for="itemShapeSelect">3D 입체 형태</label>
+              <select id="itemShapeSelect">
+                <option value="sofa" selected>소파형 (등받이+팔걸이)</option>
+                <option value="bed">침대형 (프레임+매트리스+베개)</option>
+                <option value="table">테이블/식탁형 (상판+다리)</option>
+                <option value="cabinet">수납장/박스형 (옷장·서랍장)</option>
+                <option value="appliance">가전/냉장고형 (전면 도어라인)</option>
+                <option value="tv">TV/디스플레이형 (슬림 스크린)</option>
+                <option value="chair">의자/스툴형</option>
+                <option value="plant">화분/원통형 소품</option>
+                <option value="lamp">플로어 스탠드 조명형</option>
+                <option value="rug">러그/카페트형 (바닥 밀착)</option>
+                <option value="frame">액자/벽걸이 소품형</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 제품 이미지 업로드 -->
+          <div class="item-img-upload mt-8">
+            <label for="itemImageInput" class="item-img-drop" id="itemImgDropLabel">
+              <input type="file" id="itemImageInput" accept="image/*" hidden />
+              <div id="itemImgPlaceholder" class="item-img-placeholder">
+                <span>📷 제품 이미지/사진 첨부 (선택)</span>
+                <small>첨부 시 3D 표면에 제품 텍스처 매핑 및 색상 자동 추출</small>
+              </div>
+              <div id="itemImgPreviewWrap" class="item-img-preview-wrap hidden">
+                <img id="itemImgPreview" alt="제품 미리보기" />
+                <div class="item-img-info">
+                  <span id="itemImgName">product.jpg</span>
+                  <small>3D 표면 텍스처 &amp; 포토 배지 적용됨</small>
+                </div>
+                <button type="button" class="btn-xs btn-danger" id="btnClearItemImg">✕</button>
+              </div>
+            </label>
+          </div>
+
+          <!-- 치수 입력 (W, D, H, Y mm) -->
+          <div class="dims-grid mt-8">
+            <div class="input-group">
+              <label for="itemWidthInput">가로 W (mm)</label>
+              <input type="number" id="itemWidthInput" value="2200" min="50" max="10000" step="10" />
+            </div>
+            <div class="input-group">
+              <label for="itemDepthInput">깊이 D (mm)</label>
+              <input type="number" id="itemDepthInput" value="950" min="50" max="10000" step="10" />
+            </div>
+            <div class="input-group">
+              <label for="itemHeightInput">높이 H (mm)</label>
+              <input type="number" id="itemHeightInput" value="780" min="10" max="4000" step="10" />
+            </div>
+          </div>
+
+          <div class="form-row two-col mt-8">
+            <div class="input-group">
+              <label for="itemElevationInput">바닥 띄움 높이 (mm)</label>
+              <input type="number" id="itemElevationInput" value="0" min="0" max="2400" step="50" title="벽걸이 TV나 액자 등은 바닥에서 띄울 높이를 입력하세요" />
+            </div>
+            <div class="input-group">
+              <label for="itemColorInput">기본 색상 / 마감</label>
+              <div class="color-picker-wrap">
+                <input type="color" id="itemColorInput" value="#EAE6DF" />
+                <span id="itemColorHex">#EAE6DF</span>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" class="btn-primary-full mt-10" id="btnAddCustomItem">
+            ✨ 입력한 치수로 3D 도면에 배치하기
+          </button>
+        </div>
+
+        <!-- 실측 원클릭 카탈로그 (가구 / 가전 / 소품) -->
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>⚡ 실측 규격 빠른 추가 카탈로그</h2>
+            <button type="button" class="btn-xs btn-danger" id="btnClearAllFurniture" title="건축 기본 요소만 남기고 추가 가구 모두 비우기">
+              🧹 가구 비우기
+            </button>
+          </div>
+          <p class="card-desc">
+            기본 상태는 <strong>[공간 요소]</strong> 규칙에 따라 욕실·주방·실외실 빌트인만 배치된 빈 공간입니다. 아래 실측 아이템을 눌러 바로 배치해 보세요.
+          </p>
+          <div class="catalog-grid" id="quickCatalogGrid">
+            <!-- JS에서 렌더링 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 탭 3: 배치된 가구 목록 & 선택 아이템 정밀 제어 -->
+      <section class="tab-panel" id="tab-inspector" role="tabpanel">
+        <!-- 선택된 가구 컨트롤 박스 -->
+        <div class="panel-card" id="selectedInspectorCard">
+          <div class="card-header">
+            <h2>🎯 선택 요소 정밀 제어</h2>
+            <span class="tag-pill" id="selectedItemTag">선택 없음</span>
+          </div>
+
+          <div id="noSelectionNotice" class="empty-notice">
+            3D 뷰에서 배치된 가구·가전·소품을 클릭(또는 터치)하면 위치 이동, 15°/90° 회전, 치수 변경, 벽면 거리 측정을 할 수 있습니다.
+          </div>
+
+          <div id="selectionControls" class="hidden">
+            <div class="selected-item-banner">
+              <img id="selItemThumb" class="sel-thumb hidden" alt="" />
+              <div>
+                <strong id="selItemTitle">선택된 가구</strong>
+                <p id="selItemDimsText">2200 × 950 × 780 mm</p>
+              </div>
+            </div>
+
+            <!-- 회전 컨트롤 -->
+            <div class="control-block mt-8">
+              <div class="slider-label-row">
+                <label for="sliderItemRot">회전 각도 (Rotation)</label>
+                <span id="valItemRot">0°</span>
+              </div>
+              <input type="range" id="sliderItemRot" min="0" max="360" step="15" value="0" />
+              <div class="quick-rot-btns mt-6">
+                <button type="button" class="btn-xs" data-rot-delta="-90">↺ -90°</button>
+                <button type="button" class="btn-xs" data-rot-delta="-45">-45°</button>
+                <button type="button" class="btn-xs" data-rot-delta="45">+45°</button>
+                <button type="button" class="btn-xs" data-rot-delta="90">↻ +90°</button>
+              </div>
+            </div>
+
+            <!-- 실시간 치수 재조정 -->
+            <div class="dims-grid mt-8">
+              <div class="input-group">
+                <label for="editItemW">가로 W(mm)</label>
+                <input type="number" id="editItemW" step="10" min="50" max="10000" />
+              </div>
+              <div class="input-group">
+                <label for="editItemD">깊이 D(mm)</label>
+                <input type="number" id="editItemD" step="10" min="50" max="10000" />
+              </div>
+              <div class="input-group">
+                <label for="editItemH">높이 H(mm)</label>
+                <input type="number" id="editItemH" step="10" min="10" max="4000" />
+              </div>
+            </div>
+
+            <div class="form-row two-col mt-8">
+              <div class="input-group">
+                <label for="editItemY">바닥 띄움 Y(mm)</label>
+                <input type="number" id="editItemY" step="50" min="0" max="2500" />
+              </div>
+              <div class="input-group">
+                <label for="editItemColor">색상 변경</label>
+                <input type="color" id="editItemColor" />
+              </div>
+            </div>
+
+            <!-- 벽면 거리 정보 -->
+            <div class="clearance-box mt-8" id="clearanceInfoBox">
+              <span>📏 주변 벽체 여유 거리:</span>
+              <strong id="clearanceText">좌 1,240mm / 우 2,100mm / 후면 120mm</strong>
+            </div>
+
+            <div class="sel-action-row mt-10">
+              <button type="button" class="btn-half" id="btnDuplicateItem">📋 복제</button>
+              <button type="button" class="btn-half btn-danger" id="btnDeleteItem">🗑️ 삭제</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 현재 배치된 아이템 목록 -->
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>📦 배치된 가구·가전·소품 목록</h2>
+            <div class="header-mini-btns">
+              <button type="button" class="btn-xs" id="btnSaveProject" title="JSON 파일로 내보내기">💾 저장</button>
+              <label for="loadProjectInput" class="btn-xs" title="저장한 JSON 프로젝트 불러오기">📂 불러오기</label>
+              <input type="file" id="loadProjectInput" accept=".json" hidden />
+            </div>
+          </div>
+          <ul class="placed-item-list" id="placedItemList">
+            <li class="empty-list-item">아직 추가된 가구가 없습니다. (건축 기본 공간 상태)</li>
+          </ul>
+        </div>
+      </section>
+    </aside>
+
+    <!-- 중앙 메인 뷰포트 (건축 프레젠테이션 프레임 + 3D 캔버스 / 2D 도면 편집기 / 레퍼런스 뷰) -->
+    <section class="viewport-area" id="viewportArea">
+      <!-- [스타일] 화이트 배경 & 얇은 건축 프레젠테이션 테두리 프레임 -->
+      <div class="arch-presentation-frame" id="archFrameContainer">
+        <div class="arch-inner-border">
+          <!-- 상단 건축 프레젠테이션 헤더 스탬프 -->
+          <div class="arch-Corner-tl">
+            <span class="arch-label-main">3D ISOMETRIC CUTAWAY VIEW</span>
+            <span class="arch-label-sub" id="archPlanTitleStamp">84㎡ STANDARD APARTMENT · SCALE 1:100 (UNIT: MM)</span>
+          </div>
+
+          <div class="arch-corner-tr">
+            <span class="arch-spec-pill" id="archRuleStatusPill">원목마루 · 욕실타일/도기 · 화이트주방/아일랜드 · 실외실 워시타워</span>
+          </div>
+
+          <!-- 1) 3D WebGL 캔버스 컨테이너 -->
+          <div class="canvas-holder" id="canvas3DHolder">
+            <!-- Three.js Canvas injected here -->
+            <!-- 가구 선택 시 3D 위 플로팅 라벨 오버레이 -->
+            <div id="floatingItemBadge" class="floating-item-badge hidden">
+              <img id="floatingBadgeImg" class="floating-badge-img hidden" alt="" />
+              <div class="floating-badge-text">
+                <strong id="floatingBadgeTitle">소파</strong>
+                <span id="floatingBadgeDims">2200 × 950 × 780 mm</span>
+              </div>
+              <div class="floating-badge-actions">
+                <button type="button" id="floatingBtnRot" title="90도 회전">↻ 90°</button>
+                <button type="button" id="floatingBtnDel" title="삭제">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2) 2D 도면 & 공간 편집기 뷰 (탭 전환 시 표시) -->
+          <div class="editor-2d-holder hidden" id="editor2DHolder">
+            <div class="editor-2d-toolbar">
+              <div class="tool-group">
+                <span class="tool-label">그리기/편집 도구:</span>
+                <button type="button" class="tool-2d-btn active" data-2d-tool="select">👆 방/벽 선택·이동</button>
+                <button type="button" class="tool-2d-btn" data-2d-tool="add-room-wood">🪵 원목마루 방 추가</button>
+                <button type="button" class="tool-2d-btn" data-2d-tool="add-room-bath">🚿 욕실(타일) 추가</button>
+                <button type="button" class="tool-2d-btn" data-2d-tool="add-room-utility">🧺 실외실 추가</button>
+                <button type="button" class="tool-2d-btn" data-2d-tool="add-door">🚪 문 추가</button>
+                <button type="button" class="tool-2d-btn" data-2d-tool="add-window">🪟 창문/베란다새시 추가</button>
+              </div>
+              <div class="tool-group">
+                <button type="button" class="btn-xs btn-danger" id="btnDelete2DElem">선택 요소 삭제</button>
+                <button type="button" class="btn-xs btn-accent" id="btnApply2DTo3D">🧊 3D 절단 뷰로 즉시 반영</button>
+              </div>
+            </div>
+            <div class="canvas-2d-wrap">
+              <canvas id="floorplan2DCanvas" width="960" height="720"></canvas>
+            </div>
+            <p class="editor-2d-help">
+              💡 <strong>도면 맞춤 가이드:</strong> 첨부한 평면도가 배경에 표시됩니다. 방 영역이나 문·창문·베란다 새시를 드래그해 도면과 똑같은 위치/비율로 맞춘 뒤 <strong>[3D 절단 뷰로 즉시 반영]</strong>을 누르세요.
+            </p>
+          </div>
+
+          <!-- 3) 건축 프레젠테이션 레퍼런스 & 비교 뷰 -->
+          <div class="reference-view-holder hidden" id="referenceViewHolder">
+            <div class="ref-card">
+              <div class="ref-header">
+                <div>
+                  <h3>🏛️ 건축 프레젠테이션 퀄리티 레퍼런스 &amp; AI 도면 렌더링</h3>
+                  <p>[규칙]·[공간 요소]·[스타일] 사양으로 렌더링된 3D 아이소메트릭 절단 뷰 기준 이미지입니다.</p>
+                </div>
+                <button type="button" class="action-btn btn-dark" id="btnBackToInteractive3D">
+                  🧊 실시간 3D 배치 스튜디오로 돌아가기
+                </button>
+              </div>
+              <div class="ref-image-wrap">
+                <img src="./reference-cutaway.jpg" alt="3D 아이소메트릭 절단 뷰 건축 프레젠테이션 레퍼런스" id="refRenderImage" />
+              </div>
+              <div class="ref-specs-bar">
+                <div class="spec-chip"><strong>[규칙]</strong> 도면 공간 구성·비율 유지 / 수평 절단 벽체 단면 / 문·창문·베란다 새시 동일 재현</div>
+                <div class="spec-chip"><strong>[공간 요소]</strong> 밝은 원목 마루 / 욕실 타일·욕조·세면대·샤워부스 / 화이트 빌트인 주방·아일랜드 / 실외실 세탁기·건조기 / 기타 가구 미배치</div>
+                <div class="spec-chip"><strong>[스타일]</strong> 미니멀 건축 렌더링 / 부드러운 자연광·은은한 그림자 / 화이트 배경·얇은 테두리 프레임</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 하단 카메라 & 뷰포트 플로팅 컨트롤 바 -->
+          <div class="viewport-controls-bar" id="viewportControlsBar">
+            <div class="cam-preset-group" aria-label="카메라 각도 프리셋">
+              <button type="button" class="cam-btn active" data-cam="iso-se" title="남동 아이소메트릭 (기본)">남동 ISO</button>
+              <button type="button" class="cam-btn" data-cam="iso-sw" title="남서 아이소메트릭">남서 ISO</button>
+              <button type="button" class="cam-btn" data-cam="iso-ne" title="북동 아이소메트릭">북동 ISO</button>
+              <button type="button" class="cam-btn" data-cam="iso-nw" title="북서 아이소메트릭">북서 ISO</button>
+              <button type="button" class="cam-btn" data-cam="top" title="수직 평면 뷰 (Top-Down)">평면 Top</button>
+            </div>
+            <div class="cam-zoom-group">
+              <button type="button" class="cam-btn" id="btnToggleDims" title="가구 치수 및 벽 거리 표시 토글">📏 치수선 ON</button>
+              <button type="button" class="cam-btn" id="btnZoomIn" title="확대">＋</button>
+              <button type="button" class="cam-btn" id="btnZoomOut" title="축소">－</button>
+              <button type="button" class="cam-btn" id="btnResetCam" title="뷰 초기화">⟲ 맞춤</button>
+            </div>
+          </div>
+
+          <!-- 우측 하단 건축 타이틀 블록 & 범례 -->
+          <div class="arch-corner-br">
+            <div class="legend-items">
+              <span class="legend-dot wood"></span><small>원목 마루</small>
+              <span class="legend-dot tile"></span><small>포세린 타일</small>
+              <span class="legend-dot white-cab"></span><small>화이트 빌트인</small>
+            </div>
+            <div class="scale-bar-box">
+              <div class="scale-line">
+                <span>0</span><span>1m</span><span>2m</span><span>3m</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 모바일/앱 설치 안내 모달 (Android & iPhone 호환 가이드) -->
+  <div class="modal-backdrop hidden" id="appInstallModal" role="dialog" aria-modal="true" aria-labelledby="modalInstallTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalInstallTitle">📱 안드로이드 &amp; 아이폰(iOS) 앱 설치 및 호환 안내</h3>
+        <button type="button" class="modal-close" id="btnCloseInstallModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-lead">
+          <strong>ARCHI-CUT 3D</strong>는 반응형 웹 표준(WebGL 2.0 + PWA)으로 제작되어 <strong>PC 웹, 안드로이드(Android), 아이폰/아이패드(iOS)</strong>에서 별도 스토어 심사 없이 즉시 네이티브 앱처럼 설치·실행됩니다.
+        </p>
+
+        <div class="install-platform-cards">
+          <div class="platform-card">
+            <h4>🤖 Android (갤럭시 등)</h4>
+            <ol>
+              <li>Chrome 또는 삼성 인터넷 브라우저로 접속합니다.</li>
+              <li>아래 <strong>[앱 바로 설치하기]</strong> 버튼을 누르거나 브라우저 메뉴(⋮)에서 <strong>[홈 화면에 추가 / 앱 설치]</strong>를 선택합니다.</li>
+              <li>바탕화면에 생성된 <strong>ARCHI-CUT 3D</strong> 아이콘으로 풀스크린 실행!</li>
+            </ol>
+            <button type="button" class="btn-primary-full mt-8" id="btnTriggerPWAInstall">
+              📲 Android / PC 앱 바로 설치하기
+            </button>
+          </div>
+
+          <div class="platform-card">
+            <h4>🍎 iPhone / iPad (iOS)</h4>
+            <ol>
+              <li>Safari 브라우저에서 이 페이지를 엽니다.</li>
+              <li>하단 중앙의 <strong>공유 버튼(📤)</strong>을 탭합니다.</li>
+              <li>메뉴에서 <strong>[홈 화면에 추가]</strong>를 누르면 아이폰 전체화면 어플로 설치됩니다.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="touch-guide-box mt-10">
+          <h4>👆 모바일 터치 조작법</h4>
+          <ul>
+            <li><strong>가구 이동:</strong> 배치된 가구를 한 손가락으로 터치 &amp; 드래그하여 원하는 방으로 이동</li>
+            <li><strong>시점 회전:</strong> 빈 배경을 한 손가락으로 드래그하여 360° 아이소메트릭 회전</li>
+            <li><strong>확대/축소 &amp; 팬:</strong> 두 손가락으로 핀치 줌(확대/축소) 및 화면 이동</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+
